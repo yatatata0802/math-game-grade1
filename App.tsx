@@ -1,84 +1,192 @@
-import React, { useRef, useEffect } from 'react';
-import GameScreen from './components/GameScreen';
-import useGameState from './hooks/useGameState';
-import { GameStatus } from './types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { GameState } from './types';
+import type { Question } from './types';
+import { TOTAL_QUESTIONS } from './constants';
+import { StartScreen } from './components/StartScreen';
+import { QuestionScreen } from './components/QuestionScreen';
+import { ResultsScreen } from './components/ResultsScreen';
 
-// Updated sound URLs to reliable, publicly available sources
-const BGM_URL = 'https://cdn.pixabay.com/audio/2022/08/04/audio_2dde6431e5.mp3';
-const CORRECT_SOUND_URL = 'https://cdn.pixabay.com/audio/2022/03/15/audio_2b33a5228f.mp3';
-const INCORRECT_SOUND_URL = 'https://cdn.pixabay.com/audio/2021/08/04/audio_c6d590e698.mp3';
-const LEVEL_UP_SOUND_URL = 'https://cdn.pixabay.com/audio/2022/01/18/audio_83d02b3316.mp3';
+const positiveFeedbackMessages = ["やったー！", "すごい！", "せいかい！", "そのちょうし！"];
+const incorrectFeedbackMessage = "おしい！";
 
+const generateQuestions = (): Question[] => {
+  const questions: Question[] = [];
+  while (questions.length < TOTAL_QUESTIONS) {
+    const isAddition = Math.random() > 0.5;
+    let num1: number, num2: number, answer: number, text: string;
 
-const App: React.FC = () => {
-  const gameState = useGameState();
-  
-  const bgmRef = useRef<HTMLAudioElement>(null);
-  const correctSfxRef = useRef<HTMLAudioElement>(null);
-  const incorrectSfxRef = useRef<HTMLAudioElement>(null);
-  const levelUpSfxRef = useRef<HTMLAudioElement>(null);
-
-  useEffect(() => {
-    // Autoplay BGM
-    const playBGM = () => {
-      if (bgmRef.current) {
-        bgmRef.current.volume = 0.1;
-        bgmRef.current.play().catch(() => {
-          // Muted autoplay is usually allowed, if not, user interaction will be needed.
-          bgmRef.current!.muted = true;
-          bgmRef.current!.play();
-        });
-      }
-    };
-    
-    // Set up a one-time interaction listener to unmute and play BGM
-    const handleFirstInteraction = () => {
-      if (bgmRef.current && bgmRef.current.muted) {
-        bgmRef.current.muted = false;
-        bgmRef.current.play();
-      }
-       window.removeEventListener('click', handleFirstInteraction);
-       window.removeEventListener('keydown', handleFirstInteraction);
-    };
-
-    playBGM();
-
-    window.addEventListener('click', handleFirstInteraction);
-    window.addEventListener('keydown', handleFirstInteraction);
-
-    return () => {
-       window.removeEventListener('click', handleFirstInteraction);
-       window.removeEventListener('keydown', handleFirstInteraction);
+    if (isAddition) {
+      num1 = Math.floor(Math.random() * 19) + 1; // 1-19
+      num2 = Math.floor(Math.random() * (20 - num1)) + 1; // Ensure sum <= 20
+      answer = num1 + num2;
+      text = `${num1} + ${num2} = ?`;
+    } else {
+      num1 = Math.floor(Math.random() * 19) + 2; // 2-20, to have room for num2
+      num2 = Math.floor(Math.random() * (num1 - 1)) + 1; // Ensure num1 > num2 and answer >= 0
+      answer = num1 - num2;
+      text = `${num1} - ${num2} = ?`;
     }
 
+    const options = new Set<number>();
+    options.add(answer);
+    while (options.size < 4) {
+      const wrongAnswer = Math.max(0, answer + (Math.floor(Math.random() * 7) - 3));
+      if (wrongAnswer <= 20) {
+        options.add(wrongAnswer);
+      }
+    }
+    
+    const shuffledOptions = Array.from(options).sort(() => Math.random() - 0.5);
+
+    questions.push({ text, correctAnswer: answer, options: shuffledOptions });
+  }
+  return questions;
+};
+
+const App: React.FC = () => {
+  const [gameState, setGameState] = useState<GameState>(GameState.Start);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
+  const [startTime, setStartTime] = useState<number>(0);
+  const [endTime, setEndTime] = useState<number>(0);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<string>('');
+  const [bestTime, setBestTime] = useState<number | null>(null);
+  const [previousTime, setPreviousTime] = useState<number | null>(null);
+
+  useEffect(() => {
+    try {
+      const storedBest = localStorage.getItem('mathGameBestTime');
+      const storedPrev = localStorage.getItem('mathGamePreviousTime');
+      if (storedBest) setBestTime(JSON.parse(storedBest));
+      if (storedPrev) setPreviousTime(JSON.parse(storedPrev));
+    } catch (error) {
+      console.error("Failed to parse times from localStorage", error);
+    }
   }, []);
 
-  const playSound = (sound: 'correct' | 'incorrect' | 'levelUp') => {
-    switch(sound) {
-      case 'correct':
-        correctSfxRef.current?.play();
-        break;
-      case 'incorrect':
-        incorrectSfxRef.current?.play();
-        break;
-      case 'levelUp':
-        levelUpSfxRef.current?.play();
-        break;
+  const startGame = useCallback(() => {
+    if (gameState === GameState.Finished) {
+      setPreviousTime(endTime - startTime);
+    }
+    setQuestions(generateQuestions());
+    setCurrentQuestionIndex(0);
+    setFeedback(null);
+    const now = Date.now();
+    setStartTime(now);
+    setEndTime(0);
+    setElapsedTime(0);
+    setGameState(GameState.Playing);
+  }, [gameState, endTime, startTime]);
+  
+  useEffect(() => {
+    if (gameState !== GameState.Playing) return;
+
+    const timer = setInterval(() => {
+      setElapsedTime(Date.now() - startTime);
+    }, 50);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [gameState, startTime]);
+
+  const handleAnswer = useCallback((answer: number) => {
+    if (feedback === 'correct') return;
+
+    if (answer === questions[currentQuestionIndex].correctAnswer) {
+      const message = positiveFeedbackMessages[Math.floor(Math.random() * positiveFeedbackMessages.length)];
+      setFeedbackMessage(message);
+      setFeedback('correct');
+
+      setTimeout(() => {
+        if (currentQuestionIndex < TOTAL_QUESTIONS - 1) {
+          setCurrentQuestionIndex(prev => prev + 1);
+          setFeedback(null);
+        } else {
+          const finalTime = Date.now();
+          setEndTime(finalTime);
+          const duration = finalTime - startTime;
+
+          localStorage.setItem('mathGamePreviousTime', JSON.stringify(duration));
+
+          if (bestTime === null || duration < bestTime) {
+            setBestTime(duration);
+            localStorage.setItem('mathGameBestTime', JSON.stringify(duration));
+          }
+          
+          setGameState(GameState.Finished);
+        }
+      }, 1200);
+    } else {
+      setFeedbackMessage(incorrectFeedbackMessage);
+      setFeedback('incorrect');
+      setTimeout(() => {
+        setFeedback(null);
+      }, 800);
+    }
+  }, [currentQuestionIndex, questions, startTime, bestTime, feedback]);
+
+  const renderContent = () => {
+    switch (gameState) {
+      case GameState.Playing:
+        return (
+          <QuestionScreen
+            question={questions[currentQuestionIndex]}
+            questionNumber={currentQuestionIndex + 1}
+            totalQuestions={TOTAL_QUESTIONS}
+            onAnswer={handleAnswer}
+            feedback={feedback}
+            feedbackMessage={feedbackMessage}
+            elapsedTime={elapsedTime}
+          />
+        );
+      case GameState.Finished:
+        return (
+          <ResultsScreen
+            currentTime={endTime - startTime}
+            bestTime={bestTime}
+            previousTime={previousTime}
+            onPlayAgain={startGame}
+          />
+        );
+      case GameState.Start:
+      default:
+        return <StartScreen onStart={startGame} />;
     }
   };
 
-
   return (
-    <div className="bg-gradient-to-br from-sky-400 to-blue-600 min-h-screen w-full flex items-center justify-center text-slate-800 p-4 overflow-hidden">
-      <audio ref={bgmRef} src={BGM_URL} loop />
-      <audio ref={correctSfxRef} src={CORRECT_SOUND_URL} />
-      <audio ref={incorrectSfxRef} src={INCORRECT_SOUND_URL} />
-      <audio ref={levelUpSfxRef} src={LEVEL_UP_SOUND_URL} />
-      
-      <div className="w-full max-w-4xl mx-auto">
-        <GameScreen {...gameState} playSound={playSound} />
+    <main className="bg-sky-100 min-h-screen w-full flex items-center justify-center transition-colors duration-500">
+      <style>{`
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in { animation: fade-in 0.3s ease-in-out; }
+        
+        @keyframes jump-in {
+            0% { transform: scale(0.5) translateY(50px); opacity: 0; }
+            80% { transform: scale(1.1) translateY(0); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+        .animate-jump-in { animation: jump-in 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(-3deg); }
+            50% { transform: rotate(3deg); }
+        }
+        .animate-wiggle { animation: wiggle 0.2s ease-in-out 2; }
+
+        .tabular-nums {
+            font-feature-settings: 'tnum' on, 'lnum' on;
+        }
+      `}</style>
+      <div className="container mx-auto h-screen">
+        {renderContent()}
       </div>
-    </div>
+    </main>
   );
 };
 

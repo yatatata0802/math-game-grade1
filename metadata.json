@@ -1,5 +1,5 @@
 {
-  "name": "Math Monster Adventure",
-  "description": "A fun and engaging math game for first graders to practice addition and subtraction. Level up your monster, customize its look, and become a math champion!",
+  "name": "Math Game for Kids",
+  "description": "A simple and fun addition and subtraction game for second graders. It features 20 randomly generated questions, multiple-choice answers, and tracks completion time.",
   "requestFramePermissions": []
 }
