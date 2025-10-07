@@ -45,41 +45,41 @@ const FeedbackOverlay: React.FC<{ type: 'correct' | 'incorrect', message: string
 
 export const QuestionScreen: React.FC<QuestionScreenProps> = ({ question, questionNumber, totalQuestions, onAnswer, feedback, feedbackMessage, elapsedTime }) => {
   return (
-    <div className="w-full h-full flex flex-col items-center justify-between p-4 relative">
+    <div className="w-full h-full flex flex-col items-center justify-center p-4 relative">
       {feedback && <FeedbackOverlay type={feedback} message={feedbackMessage} />}
       
-      <div className="w-full max-w-4xl text-center">
-        <div className="flex items-center justify-between gap-4 bg-white/80 rounded-full px-6 py-2 shadow-md">
-            <div className="flex items-center gap-4">
-                <StarIcon className="w-8 h-8 text-yellow-400" />
-                <p className="text-3xl font-bold text-gray-700">もんだい {questionNumber}/{totalQuestions}</p>
-            </div>
-            <div className="flex items-center gap-2 text-gray-700">
-                <ClockIcon className="w-8 h-8" />
-                <p className="text-3xl font-bold w-36 text-left tabular-nums">{formatTime(elapsedTime)}</p>
+      <div className="w-full max-w-4xl flex flex-col items-center space-y-6 md:space-y-8">
+        <div className="w-full text-center">
+            <div className="flex items-center justify-between gap-4 bg-white/80 rounded-full px-6 py-2 shadow-md">
+                <div className="flex items-center gap-4">
+                    <StarIcon className="w-8 h-8 text-yellow-400" />
+                    <p className="text-3xl font-bold text-gray-700">もんだい {questionNumber}/{totalQuestions}</p>
+                </div>
+                <div className="flex items-center gap-2 text-gray-700">
+                    <ClockIcon className="w-8 h-8" />
+                    <p className="text-3xl font-bold w-36 text-left tabular-nums">{formatTime(elapsedTime)}</p>
+                </div>
             </div>
         </div>
-      </div>
 
-      <div className="flex-grow flex items-center justify-center w-full">
-        <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12 w-full max-w-4xl">
+        <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12 w-full">
           <p className="text-center text-7xl md:text-9xl font-bold text-gray-800 tracking-wider">
             {question.text}
           </p>
         </div>
-      </div>
 
-      <div className="w-full max-w-4xl grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
-        {question.options.map((option, index) => (
-          <button
-            key={index}
-            onClick={() => onAnswer(option)}
-            disabled={feedback === 'correct'}
-            className={`text-white font-bold text-5xl py-8 rounded-2xl shadow-lg transform transition-transform duration-150 active:scale-95 disabled:opacity-50 ${buttonColors[index % 4]}`}
-          >
-            {option}
-          </button>
-        ))}
+        <div className="w-full grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {question.options.map((option, index) => (
+            <button
+              key={index}
+              onClick={() => onAnswer(option)}
+              disabled={feedback === 'correct'}
+              className={`text-white font-bold text-5xl py-8 rounded-2xl shadow-lg transform transition-transform duration-150 active:scale-95 disabled:opacity-50 ${buttonColors[index % 4]}`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
